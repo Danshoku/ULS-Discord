@@ -1,0 +1,31 @@
+[2026-01-20 16:48:58] >>> Batiste a rejoint le serveur.
+[2026-01-20 16:49:05] Batiste: Salut à tous
+[2026-01-20 16:49:17] >>> Corentin a rejoint le serveur.
+[2026-01-20 16:49:20] Corentin: bon bon
+[2026-01-20 16:49:30] <<< Batiste est parti.
+[2026-01-20 16:49:45] >>> New a rejoint le serveur.
+[2026-01-20 16:49:51] New: k
+[2026-01-20 16:55:38] >>> Corentin a rejoint le serveur.
+[2026-01-20 16:55:50] Corentin: ALLOKIUFGU<GFGF
+[2026-01-20 16:56:01] >>> Batiste a rejoint le serveur.
+[2026-01-20 16:56:09] Batiste: oui
+[2026-01-20 16:56:17] <<< Corentin est parti.
+[2026-01-20 16:56:22] <<< Batiste est parti.
+[2026-01-20 16:56:29] >>> Corentin a rejoint le serveur.
+[2026-01-20 16:57:02] <<< Corentin est parti.
+[2026-01-20 17:15:10] SYSTEM: >>> Batiste a rejoint le serveur.
+[2026-01-20 17:15:49] SYSTEM: >>> Corentin a rejoint le serveur.
+[2026-01-20 17:16:16] SYSTEM: >>> New a rejoint le serveur.
+[2026-01-20 17:16:25] PRIVÉ Corentin -> New : oui
+[2026-01-20 17:16:30] PRIVÉ Corentin -> Batiste : k
+[2026-01-20 17:27:17] SYSTEM: >>> Batiste a rejoint le serveur.
+[2026-01-20 17:28:15] SYSTEM: >>> Corentin a rejoint le serveur.
+[2026-01-20 17:29:18] SYSTEM: >>> Corentin a rejoint le serveur.
+[2026-01-20 17:30:57] SYSTEM: >>> non a rejoint le serveur.
+[2026-01-20 17:32:37] SYSTEM: >>> Batiste a rejoint le serveur.
+[2026-01-20 17:32:51] SYSTEM: >>> Corentin a rejoint le serveur.
+[2026-01-20 17:33:14] PRIVÉ Corentin -> Batiste : oui
+[2026-01-20 17:36:21] SYSTEM: >>> Corentin a rejoint le serveur.
+[2026-01-20 17:36:57] SYSTEM: >>> Batiste a rejoint le serveur.
+[2026-01-20 17:37:03] PRIVÉ Batiste -> Corentin : mm
+[2026-01-20 17:38:33] SYSTEM: >>> Corentin a rejoint le serveur.
