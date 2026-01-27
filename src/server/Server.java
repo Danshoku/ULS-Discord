@@ -11,8 +11,30 @@ public class Server {
     private static DatabaseManager dbManager;
 
     public static void main(String[] args) {
-        System.out.println(">>> Serveur Discord (Fixé) démarré...");
         dbManager = new DatabaseManager();
+
+        // --- DÉBUT AJOUT : Affichage automatique de l'IP ---
+        System.out.println(">>> Serveur Discord (Fixé) démarré...");
+        System.out.println("------------------------------------------------");
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    // On cherche l'IPv4 locale (type 192.168.x.x)
+                    if (addr instanceof Inet4Address) {
+                        System.out.println("✅ IP À UTILISER SUR LE CLIENT : " + addr.getHostAddress());
+                    }
+                }
+            }
+        } catch (SocketException e) { e.printStackTrace(); }
+        System.out.println("Port ouvert : " + PORT);
+        System.out.println("------------------------------------------------");
+        // --- FIN AJOUT ---
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {

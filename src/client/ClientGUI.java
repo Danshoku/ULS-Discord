@@ -65,7 +65,7 @@ public class ClientGUI extends JFrame {
     }
 
     private void buildInterface() {
-        // 1. GAUCHE EXTRÊME
+        // 1. GAUCHE EXTRÊME (Serveurs)
         serverStrip = new JPanel();
         serverStrip.setPreferredSize(new Dimension(72, 0));
         serverStrip.setBackground(DISCORD_SERVER_STRIP);
@@ -87,11 +87,11 @@ public class ClientGUI extends JFrame {
 
         add(serverStrip, BorderLayout.WEST);
 
-        // 2. CENTRE
+        // 2. CENTRE GLOBAL
         JPanel mainContent = new JPanel(new BorderLayout());
         add(mainContent, BorderLayout.CENTER);
 
-        // 3. SIDEBAR
+        // 3. SIDEBAR (Amis ou Salons)
         JPanel sidebarPanel = new JPanel(new BorderLayout());
         sidebarPanel.setPreferredSize(new Dimension(240, 0));
         sidebarPanel.setBackground(DISCORD_SIDEBAR);
@@ -143,7 +143,7 @@ public class ClientGUI extends JFrame {
         sidebarPanel.add(sidebarList, BorderLayout.CENTER);
         mainContent.add(sidebarPanel, BorderLayout.WEST);
 
-        // 4. CHAT
+        // 4. ZONE DE CHAT
         JPanel chatPanel = new JPanel(new BorderLayout());
         chatPanel.setBackground(DISCORD_BG);
 
@@ -184,7 +184,7 @@ public class ClientGUI extends JFrame {
 
         mainContent.add(chatPanel, BorderLayout.CENTER);
 
-        // 5. DROITE
+        // 5. LISTE DES MEMBRES (DROITE)
         JPanel membersPanel = new JPanel(new BorderLayout());
         membersPanel.setPreferredSize(new Dimension(240, 0));
         membersPanel.setBackground(DISCORD_SIDEBAR);
@@ -203,6 +203,8 @@ public class ClientGUI extends JFrame {
 
         mainContent.add(membersPanel, BorderLayout.EAST);
     }
+
+    // --- LOGIQUE MÉTIER ---
 
     private void createServerDialog() {
         String name = JOptionPane.showInputDialog(this, "Nom du nouveau serveur :");
@@ -278,7 +280,6 @@ public class ClientGUI extends JFrame {
                 JOptionPane.showMessageDialog(this, "Sélectionnez un ami ou un salon !");
                 return;
             }
-            // CORRECTION : Utilisation de /// pour envoyer le message
             out.println(currentContext + "///" + msg);
             inputField.setText("");
         }
@@ -298,6 +299,8 @@ public class ClientGUI extends JFrame {
         return p;
     }
 
+    // --- CONNEXION ET RÉSEAU ---
+
     private void start() {
         UIManager.put("OptionPane.background", DISCORD_BG);
         UIManager.put("Panel.background", DISCORD_BG);
@@ -305,23 +308,38 @@ public class ClientGUI extends JFrame {
 
         boolean connected = false;
         while (!connected) {
-            JPanel loginPanel = new JPanel(new GridLayout(4, 1));
+            // Création de la fenêtre de Login avec CHAMP IP
+            JPanel loginPanel = new JPanel(new GridLayout(6, 1));
             loginPanel.setBackground(DISCORD_BG);
-            JTextField userField = new JTextField();
-            JPasswordField passField = new JPasswordField();
-            JLabel uL = new JLabel("Pseudo:"); uL.setForeground(TEXT_MUTED);
-            JLabel pL = new JLabel("Mot de passe:"); pL.setForeground(TEXT_MUTED);
-            loginPanel.add(uL); loginPanel.add(userField); loginPanel.add(pL); loginPanel.add(passField);
 
-            int res = JOptionPane.showConfirmDialog(this, loginPanel, "Login", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            JLabel ipLabel = new JLabel("IP du Serveur:"); ipLabel.setForeground(TEXT_MUTED);
+            // Par défaut "localhost", l'utilisateur doit changer ça s'il est sur un autre PC
+            JTextField ipField = new JTextField("localhost");
+
+            JLabel uL = new JLabel("Pseudo:"); uL.setForeground(TEXT_MUTED);
+            JTextField userField = new JTextField();
+
+            JLabel pL = new JLabel("Mot de passe:"); pL.setForeground(TEXT_MUTED);
+            JPasswordField passField = new JPasswordField();
+
+            loginPanel.add(ipLabel); loginPanel.add(ipField);
+            loginPanel.add(uL); loginPanel.add(userField);
+            loginPanel.add(pL); loginPanel.add(passField);
+
+            int res = JOptionPane.showConfirmDialog(this, loginPanel, "Connexion Discord", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (res != JOptionPane.OK_OPTION) System.exit(0);
 
+            String ip = ipField.getText().trim();
             String u = userField.getText().trim();
             String p = new String(passField.getPassword()).trim();
+
+            if (ip.isEmpty()) ip = "127.0.0.1";
             if (u.isEmpty() || p.isEmpty()) continue;
 
             try {
-                socket = new Socket("127.0.0.1", 1234);
+                // Connexion avec l'IP dynamique
+                socket = new Socket(ip, 1234);
+
                 out = new PrintWriter(socket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out.println(u); out.println(p);
@@ -336,7 +354,9 @@ public class ClientGUI extends JFrame {
                 } else if (resp != null && resp.startsWith("FAIL:")) {
                     JOptionPane.showMessageDialog(this, resp.substring(5));
                 }
-            } catch (Exception e) { JOptionPane.showMessageDialog(this, "Serveur introuvable"); }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Impossible de rejoindre le serveur à l'adresse : " + ip + "\nVérifiez que le serveur est lancé et l'IP correcte.");
+            }
         }
     }
 
@@ -360,7 +380,6 @@ public class ClientGUI extends JFrame {
                         }
                     }
                     else if (msg.startsWith("MSG:") || msg.startsWith("HISTORY:")) {
-                        // CORRECTION : Parsing avec ///
                         String payload = msg.contains("MSG:") ? msg.substring(4) : msg.substring(8);
                         int idx1 = payload.indexOf("///");
                         int idx2 = payload.indexOf("///", idx1 + 3);
@@ -406,6 +425,8 @@ public class ClientGUI extends JFrame {
             } catch (IOException e) {}
         }
     }
+
+    // --- CLASSES DE RENDU VISUEL ---
 
     static class PaddingRenderer extends DefaultListCellRenderer {
         private int padding;
