@@ -8,6 +8,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.List;
+import java.util.Timer;
 import javax.sound.sampled.*;
 
 public class ClientGUI extends JFrame {
@@ -122,6 +123,7 @@ public class ClientGUI extends JFrame {
         voiceStatusBtn.addActionListener(e -> {
             leaveVoiceChannel();
             voiceStatusBtn.setVisible(false);
+            chatTitleLabel.setText(chatTitleLabel.getText().replace(" (Connecté)", ""));
         });
 
         JPanel headerButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
@@ -503,13 +505,14 @@ public class ClientGUI extends JFrame {
         }
     }
 
-    // --- PARTIE VOCALE ---
+    // --- PARTIE VOCALE ROBUSTE (CORRIGÉE) ---
 
     private DatagramSocket voiceSocket;
     private boolean isVoiceRunning = false;
     private String currentVoiceChannel = null;
     private Thread captureThread;
     private Thread playbackThread;
+    private Timer keepAliveTimer;
 
     private void joinVoiceChannel(String fullChannelName) {
         if (isVoiceRunning) leaveVoiceChannel();
@@ -519,15 +522,30 @@ public class ClientGUI extends JFrame {
             currentVoiceChannel = fullChannelName;
             InetAddress srvAddr = socket.getInetAddress();
 
+            // 1. Envoi paquet d'initialisation pour s'enregistrer au serveur
+            byte[] header = (fullChannelName + "\0").getBytes();
+            DatagramPacket init = new DatagramPacket(header, header.length, srvAddr, 1235);
+            voiceSocket.send(init);
+
+            // 2. Lancement Capture et Lecture (LITTLE ENDIAN pour Windows)
             captureThread = new Thread(new AudioCapture(srvAddr));
             playbackThread = new Thread(new AudioPlayback());
             captureThread.start();
             playbackThread.start();
 
-            // Envoi d'un premier paquet pour s'enregistrer au serveur
-            byte[] header = (fullChannelName + "\0").getBytes();
-            DatagramPacket init = new DatagramPacket(header, header.length, srvAddr, 1235);
-            voiceSocket.send(init);
+            // 3. Keep-Alive (Battement de coeur)
+            // Envoie un paquet vide toutes les 3s si on ne parle pas, pour garder le port UDP ouvert (NAT)
+            keepAliveTimer = new Timer();
+            keepAliveTimer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    if (isVoiceRunning && voiceSocket != null && !voiceSocket.isClosed()) {
+                        try {
+                            voiceSocket.send(init); // Renvoie le header d'init comme heartbeat
+                        } catch (IOException e) {}
+                    }
+                }
+            }, 1000, 3000);
 
             JOptionPane.showMessageDialog(this, "Connecté au salon vocal : " + fullChannelName.split("\\|")[1]);
         } catch (Exception e) {
@@ -538,6 +556,7 @@ public class ClientGUI extends JFrame {
 
     private void leaveVoiceChannel() {
         isVoiceRunning = false;
+        if (keepAliveTimer != null) keepAliveTimer.cancel();
         if (voiceSocket != null && !voiceSocket.isClosed()) voiceSocket.close();
         currentVoiceChannel = null;
     }
@@ -548,24 +567,33 @@ public class ClientGUI extends JFrame {
         @Override
         public void run() {
             try {
-                AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, true);
+                // MODIFICATION IMPORTANTE : false à la fin = LITTLE ENDIAN (Standard PC)
+                AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, false);
                 DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+
                 if (!AudioSystem.isLineSupported(info)) { System.err.println("Micro non supporté"); return; }
+
                 TargetDataLine micro = (TargetDataLine) AudioSystem.getLine(info);
                 micro.open(format); micro.start();
 
-                System.out.println("Micro ouvert.");
                 byte[] buffer = new byte[1024];
                 byte[] header = (currentVoiceChannel + "\0").getBytes();
 
                 while (isVoiceRunning) {
-                    int read = micro.read(buffer, 0, buffer.length);
-                    byte[] packetData = new byte[header.length + read];
-                    System.arraycopy(header, 0, packetData, 0, header.length);
-                    System.arraycopy(buffer, 0, packetData, header.length, read);
+                    if (micro.available() > 0) {
+                        int read = micro.read(buffer, 0, buffer.length);
+                        // On n'envoie que si on a lu quelque chose
+                        if (read > 0) {
+                            byte[] packetData = new byte[header.length + read];
+                            System.arraycopy(header, 0, packetData, 0, header.length);
+                            System.arraycopy(buffer, 0, packetData, header.length, read);
 
-                    DatagramPacket packet = new DatagramPacket(packetData, packetData.length, srvAddr, 1235);
-                    if (voiceSocket != null && !voiceSocket.isClosed()) voiceSocket.send(packet);
+                            DatagramPacket packet = new DatagramPacket(packetData, packetData.length, srvAddr, 1235);
+                            if (voiceSocket != null && !voiceSocket.isClosed()) voiceSocket.send(packet);
+                        }
+                    } else {
+                        Thread.sleep(10); // Évite de surcharger le CPU si pas de son
+                    }
                 }
                 micro.close();
             } catch (Exception e) { if (isVoiceRunning) e.printStackTrace(); }
@@ -576,21 +604,27 @@ public class ClientGUI extends JFrame {
         @Override
         public void run() {
             try {
-                AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, true);
+                // MODIFICATION IMPORTANTE : false à la fin = LITTLE ENDIAN
+                AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, false);
                 DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
                 SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(info);
                 speakers.open(format); speakers.start();
 
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[4096]; // Buffer plus large pour la réception
                 while (isVoiceRunning) {
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                     if (voiceSocket != null && !voiceSocket.isClosed()) {
                         voiceSocket.receive(packet);
                         byte[] data = packet.getData();
                         int len = packet.getLength();
+
+                        // Sauter le header
                         int offset = 0;
                         for (int i = 0; i < len; i++) { if (data[i] == 0) { offset = i + 1; break; } }
-                        if (offset < len) speakers.write(data, offset, len - offset);
+
+                        if (offset < len) {
+                            speakers.write(data, offset, len - offset);
+                        }
                     }
                 }
                 speakers.close();

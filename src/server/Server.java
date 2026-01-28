@@ -13,7 +13,7 @@ public class Server {
     public static void main(String[] args) {
         dbManager = new DatabaseManager();
 
-        System.out.println(">>> Serveur Discord (Complet) démarré...");
+        System.out.println(">>> Serveur Discord (Fixé) démarré...");
         System.out.println("------------------------------------------------");
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
@@ -97,7 +97,6 @@ public class Server {
                 for (String h : dbManager.getRelevantHistory(username)) out.println(h);
                 Server.sendFriendList(this);
 
-                // Envoi des serveurs dont je suis membre
                 List<String> myServers = dbManager.getUserServers(username);
                 for (String srv : myServers) {
                     out.println("NEW_SERVER:" + srv);
@@ -110,7 +109,6 @@ public class Server {
                     if (msg.startsWith("/create_server ")) {
                         String name = msg.substring(15).trim();
                         if (dbManager.createServer(name, username)) {
-                            // Seul le créateur reçoit l'info immédiatement
                             this.sendMessage("NEW_SERVER:" + name);
                             this.sendMessage("NEW_CHANNEL:" + name + "|#general");
                         } else {
@@ -130,9 +128,8 @@ public class Server {
                         }
                     }
                     else if (msg.startsWith("/create_channel ")) {
-                        String[] parts = msg.split(" ", 3); // /create_channel NomServeur #NomChannel
+                        String[] parts = msg.split(" ", 3);
                         if (parts.length == 3 && dbManager.createChannel(parts[1], parts[2])) {
-                            // Broadcast système : les clients filtreront si ils ne sont pas dans le serveur
                             Server.broadcastSystem("NEW_CHANNEL:" + parts[1] + "|" + parts[2]);
                         }
                     }
@@ -180,11 +177,12 @@ public class Server {
 
         @Override
         public void run() {
+            System.out.println(">>> Serveur Vocal (UDP) prêt sur le port " + VOICE_PORT);
             try (DatagramSocket socket = new DatagramSocket(VOICE_PORT)) {
                 byte[] buffer = new byte[4096];
                 while (true) {
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    socket.receive(packet);
+                    socket.receive(packet); // Bloquant jusqu'à réception
 
                     byte[] data = packet.getData();
                     int len = packet.getLength();
@@ -201,17 +199,29 @@ public class Server {
                         int clientPort = packet.getPort();
                         String clientKey = clientIP.getHostAddress() + ":" + clientPort;
 
-                        voiceChannels.computeIfAbsent(header, k -> new HashSet<>()).add(clientKey);
+                        // Ajout du client s'il n'est pas connu
+                        Set<String> participants = voiceChannels.computeIfAbsent(header, k -> new HashSet<>());
+                        if (participants.add(clientKey)) {
+                            // Petit log pour le debug
+                            System.out.println("🎙️ Nouveau client vocal : " + clientKey + " dans " + header);
+                        }
 
                         // Broadcast audio aux autres
-                        Set<String> participants = voiceChannels.get(header);
                         for (String participant : participants) {
                             if (!participant.equals(clientKey)) {
-                                String[] parts = participant.split(":");
-                                InetAddress targetIP = InetAddress.getByName(parts[0]);
-                                int targetPort = Integer.parseInt(parts[1]);
-                                DatagramPacket forward = new DatagramPacket(data, len, targetIP, targetPort);
-                                socket.send(forward);
+                                try {
+                                    // Gestion propre de l'IP et du Port
+                                    int lastColon = participant.lastIndexOf(":");
+                                    String ipStr = participant.substring(0, lastColon);
+                                    int port = Integer.parseInt(participant.substring(lastColon + 1));
+
+                                    InetAddress targetIP = InetAddress.getByName(ipStr);
+
+                                    DatagramPacket forward = new DatagramPacket(data, len, targetIP, port);
+                                    socket.send(forward);
+                                } catch (Exception e) {
+                                    System.err.println("Erreur envoi vocal vers " + participant);
+                                }
                             }
                         }
                     }
