@@ -127,6 +127,7 @@ public class Server {
 
                 String msg;
                 while ((msg = in.readLine()) != null) {
+                    System.out.println("[DEBUG] Reçu de " + username + ": " + msg);
                     if (msg.startsWith("/create_server ")) {
                         String name = msg.substring(15).trim();
                         if (dbManager.createServer(name, username)) {
@@ -135,7 +136,40 @@ public class Server {
                         } else {
                             this.sendMessage("MSG:HOME///Système///Erreur: Nom déjà pris.");
                         }
-                    } else if (msg.startsWith("/join_server ")) {
+                    } else if (msg.startsWith("/create_invite ")) {
+                        String srv = msg.substring(15).trim();
+                        String code = dbManager.createInvite(srv);
+                        if (code != null)
+                            this.sendMessage("INVITE_CODE:" + code);
+                        else
+                            this.sendMessage("MSG:HOME///Système///Erreur génération invitation.");
+                    } else if (msg.startsWith("/join ")) {
+                        String code = msg.substring(6).trim();
+                        String realName = dbManager.getServerFromInvite(code);
+                        if (realName != null) {
+                            String joined = dbManager.joinServer(realName, username);
+                            if (joined != null) {
+                                this.sendMessage("NEW_SERVER:" + joined);
+                                List<String> chans = dbManager.getChannels(joined);
+                                for (String chan : chans)
+                                    this.sendMessage("NEW_CHANNEL:" + joined + "|" + chan);
+                                this.sendMessage("MSG:HOME///Système///Vous avez rejoint : " + joined);
+                            } else {
+                                this.sendMessage(
+                                        "MSG:HOME///Système///Erreur: Impossible de rejoindre le serveur (DB Error).");
+                            }
+                        } else {
+                            this.sendMessage("MSG:HOME///Système///Invitation invalide.");
+                        }
+                    } else if (msg.startsWith("/leave ")) {
+                        String srv = msg.substring(7).trim();
+                        if (dbManager.leaveServer(username, srv)) {
+                            this.sendMessage("LEFT_SERVER:" + srv);
+                            this.sendMessage("MSG:HOME///Système///Vous avez quitté " + srv);
+                        }
+                    }
+                    // OLD JOIN SERVER (Gardé au cas où mais plus utilisé par UI)
+                    else if (msg.startsWith("/join_server ")) {
                         String inputName = msg.substring(13).trim();
                         String realName = dbManager.joinServer(inputName, username);
                         if (realName != null) {

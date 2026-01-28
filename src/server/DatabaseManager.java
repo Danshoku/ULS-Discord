@@ -9,7 +9,10 @@ public class DatabaseManager {
 
     public DatabaseManager() {
         try {
-            String url = "jdbc:sqlite:discord.db";
+            // Force usage of project root discord.db
+            String path = System.getProperty("user.dir") + java.io.File.separator + "discord.db";
+            System.out.println("[DEBUG] Database Path: " + path);
+            String url = "jdbc:sqlite:" + path;
             connection = DriverManager.getConnection(url);
             createTables();
         } catch (SQLException e) {
@@ -31,6 +34,7 @@ public class DatabaseManager {
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "sender TEXT, content TEXT, context TEXT, " +
                     "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            stmt.execute("CREATE TABLE IF NOT EXISTS invites (code TEXT PRIMARY KEY, server_name TEXT)");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -39,6 +43,7 @@ public class DatabaseManager {
     // --- GESTION SERVEURS ---
 
     public String joinServer(String inputName, String username) {
+        System.out.println("[DEBUG] joinServer called for: " + inputName + " as " + username);
         String realName = null;
         // Recherche insensible à la casse
         try (PreparedStatement check = connection
@@ -47,20 +52,28 @@ public class DatabaseManager {
             ResultSet rs = check.executeQuery();
             if (rs.next())
                 realName = rs.getString("name");
-            else
+            else {
+                System.out.println("[DEBUG] Server not found: " + inputName);
                 return null;
+            }
         } catch (SQLException e) {
+            System.out.println("[DEBUG] Select Server Error: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
 
         // Vérification membre
         try (PreparedStatement check = connection
-                .prepareStatement("SELECT id FROM server_members WHERE server_name = ? AND username = ?")) {
+                .prepareStatement("SELECT 1 FROM server_members WHERE server_name = ? AND username = ?")) {
             check.setString(1, realName);
             check.setString(2, username);
-            if (check.executeQuery().next())
+            if (check.executeQuery().next()) {
+                System.out.println("[DEBUG] Already member of: " + realName);
                 return realName;
+            }
         } catch (SQLException e) {
+            System.out.println("[DEBUG] Check Member Error: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
 
@@ -70,8 +83,11 @@ public class DatabaseManager {
             pstmt.setString(1, realName);
             pstmt.setString(2, username);
             pstmt.executeUpdate();
+            System.out.println("[DEBUG] Added member to: " + realName);
             return realName;
         } catch (SQLException e) {
+            System.out.println("[DEBUG] Add Member Error: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -109,6 +125,58 @@ public class DatabaseManager {
         } catch (SQLException e) {
         }
         return l;
+    }
+
+    public String createInvite(String serverName) {
+        String code = generateRandomCode(6);
+        try (PreparedStatement u = connection.prepareStatement("INSERT INTO invites(code, server_name) VALUES(?, ?)")) {
+            u.setString(1, code);
+            u.setString(2, serverName);
+            u.executeUpdate();
+            return code;
+        } catch (SQLException e) {
+            System.out.println("DB ERROR: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public String getServerFromInvite(String code) {
+        try (PreparedStatement p = connection.prepareStatement("SELECT server_name FROM invites WHERE code=?")) {
+            p.setString(1, code);
+            ResultSet rs = p.executeQuery();
+            String res = rs.next() ? rs.getString("server_name") : null;
+            System.out.println("[DEBUG] Resolving Invite Code " + code + " -> " + res);
+            return res;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public boolean leaveServer(String username, String serverName) {
+        try (PreparedStatement p = connection
+                .prepareStatement("DELETE FROM server_members WHERE username=? AND server_name=?")) {
+            p.setString(1, username);
+            p.setString(2, serverName);
+            p.setString(1, username);
+            p.setString(2, serverName);
+            int rows = p.executeUpdate();
+            System.out.println("[DEBUG] Leave Server: " + username + " from " + serverName + ". Rows: " + rows);
+            return rows > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private String generateRandomCode(int len) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        StringBuilder sb = new StringBuilder();
+        java.util.Random rnd = new java.util.Random();
+        for (int i = 0; i < len; i++)
+            sb.append(chars.charAt(rnd.nextInt(chars.length())));
+        return sb.toString();
     }
 
     // --- GESTION MESSAGES & CANAUX ---

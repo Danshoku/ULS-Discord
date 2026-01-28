@@ -38,7 +38,7 @@ public class ClientGUI extends JFrame {
     private Map<String, List<String>> serverChannels = new HashMap<>();
 
     private JPanel serverStrip;
-    private JLabel sidebarTitle;
+    private JButton sidebarTitle;
     private JList<String> sidebarList;
     private DefaultListModel<String> sidebarListModel;
 
@@ -50,7 +50,6 @@ public class ClientGUI extends JFrame {
     private JLabel chatTitleLabel;
     private JList<String> userList;
     private DefaultListModel<String> userListModel;
-    private JButton addActionBtn;
     private JButton voiceStatusBtn;
 
     public ClientGUI() {
@@ -110,17 +109,38 @@ public class ClientGUI extends JFrame {
         sidebarHeader.setBorder(new EmptyBorder(10, 10, 10, 10));
         sidebarHeader.setPreferredSize(new Dimension(0, 50));
 
-        sidebarTitle = new JLabel("MESSAGES PRIVÉS");
+        sidebarTitle = new JButton("MESSAGES PRIVÉS");
         sidebarTitle.setForeground(TEXT_HEADER);
+        sidebarTitle.setBackground(DISCORD_SIDEBAR);
         sidebarTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        sidebarTitle.setBorder(null);
+        sidebarTitle.setFocusPainted(false);
+        sidebarTitle.setHorizontalAlignment(SwingConstants.LEFT);
+        sidebarTitle.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        sidebarTitle.addActionListener(e -> {
+            if (!activeServer.equals("HOME")) {
+                JPopupMenu menu = new JPopupMenu();
+                JMenuItem inviteItem = new JMenuItem("Inviter des gens");
+                inviteItem.addActionListener(x -> out.println("/create_invite " + activeServer));
+                JMenuItem createChanItem = new JMenuItem("Créer un salon");
+                createChanItem.addActionListener(x -> handleAddAction());
+                JMenuItem leaveItem = new JMenuItem("Quitter le serveur");
+                leaveItem.setForeground(Color.RED);
+                leaveItem.addActionListener(x -> {
+                    if (JOptionPane.showConfirmDialog(ClientGUI.this,
+                            "Voulez-vous vraiment quitter " + activeServer + " ?", "Quitter",
+                            JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                        out.println("/leave " + activeServer);
+                    }
+                });
+                menu.add(inviteItem);
+                menu.add(createChanItem);
+                menu.addSeparator();
+                menu.add(leaveItem);
+                menu.show(sidebarTitle, 0, sidebarTitle.getHeight());
+            }
+        });
         sidebarHeader.add(sidebarTitle, BorderLayout.CENTER);
-
-        addActionBtn = new JButton("+");
-        addActionBtn.setBackground(ONLINE_GREEN);
-        addActionBtn.setForeground(Color.WHITE);
-        addActionBtn.setFocusPainted(false);
-        addActionBtn.setBorder(new EmptyBorder(2, 8, 2, 8));
-        addActionBtn.addActionListener(e -> handleAddAction());
 
         voiceStatusBtn = new JButton("Déco Vocal");
         voiceStatusBtn.setBackground(Color.RED);
@@ -138,7 +158,7 @@ public class ClientGUI extends JFrame {
         JPanel headerButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         headerButtons.setBackground(DISCORD_SIDEBAR);
         headerButtons.add(voiceStatusBtn);
-        headerButtons.add(addActionBtn);
+        sidebarHeader.add(headerButtons, BorderLayout.EAST);
         sidebarHeader.add(headerButtons, BorderLayout.EAST);
 
         sidebarPanel.add(sidebarHeader, BorderLayout.NORTH);
@@ -249,9 +269,9 @@ public class ClientGUI extends JFrame {
                 out.println("/create_server " + name.trim());
             }
         } else if (n == 1) { // REJOINDRE
-            String name = JOptionPane.showInputDialog(this, "Nom du serveur à rejoindre :");
-            if (name != null && !name.trim().isEmpty()) {
-                out.println("/join_server " + name.trim());
+            String code = JOptionPane.showInputDialog(this, "Entrez le code d'invitation :");
+            if (code != null && !code.trim().isEmpty()) {
+                out.println("/join " + code.trim());
             }
         }
     }
@@ -480,9 +500,34 @@ public class ClientGUI extends JFrame {
                             for (String u : users)
                                 userListModel.addElement(u);
                         });
+                    } else if (msg.startsWith("INVITE_CODE:")) {
+                        String code = msg.substring(12);
+                        SwingUtilities.invokeLater(() -> {
+                            JTextArea ta = new JTextArea(code);
+                            ta.setEditable(false);
+                            JOptionPane.showMessageDialog(ClientGUI.this, ta, "Voici votre lien d'invitation",
+                                    JOptionPane.INFORMATION_MESSAGE);
+                        });
+                    } else if (msg.startsWith("LEFT_SERVER:")) {
+                        String srv = msg.substring(12);
+                        SwingUtilities.invokeLater(() -> {
+                            // Remove icon
+                            for (Component c : serverStrip.getComponents()) {
+                                if (c instanceof JPanel && srv.equals(((JPanel) c).getToolTipText())) {
+                                    serverStrip.remove(c);
+                                    serverStrip.revalidate();
+                                    serverStrip.repaint();
+                                    break;
+                                }
+                            }
+                            if (activeServer.equals(srv))
+                                showHomeView();
+                        });
                     }
                 }
-            } catch (IOException e) {
+            } catch (
+
+            IOException e) {
             }
         }
     }
