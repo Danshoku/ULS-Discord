@@ -13,28 +13,28 @@ public class Server {
     public static void main(String[] args) {
         dbManager = new DatabaseManager();
 
-        // --- DÉBUT AJOUT : Affichage automatique de l'IP ---
-        System.out.println(">>> Serveur Discord (Fixé) démarré...");
+        System.out.println(">>> Serveur Discord (Complet) démarré...");
         System.out.println("------------------------------------------------");
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
                 if (iface.isLoopback() || !iface.isUp()) continue;
-
                 Enumeration<InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
-                    // On cherche l'IPv4 locale (type 192.168.x.x)
                     if (addr instanceof Inet4Address) {
                         System.out.println("✅ IP À UTILISER SUR LE CLIENT : " + addr.getHostAddress());
                     }
                 }
             }
         } catch (SocketException e) { e.printStackTrace(); }
-        System.out.println("Port ouvert : " + PORT);
+        System.out.println("Port TCP (Chat)  : " + PORT);
+        System.out.println("Port UDP (Vocal) : 1235");
         System.out.println("------------------------------------------------");
-        // --- FIN AJOUT ---
+
+        // Démarrage du serveur vocal
+        new Thread(new VoiceServer()).start();
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {
@@ -50,7 +50,6 @@ public class Server {
 
     public static void broadcastMessage(String sender, String content, String context) {
         dbManager.saveMessage(sender, content, context);
-        // CORRECTION : Utilisation de /// pour séparer le protocole réseau
         String proto = "MSG:" + context + "///" + sender + "///" + content;
         for (ClientHandler client : clientHandlers) client.sendMessage(proto);
     }
@@ -66,9 +65,7 @@ public class Server {
     }
 
     public static String getMPContext(String u1, String u2) {
-        String[] users = {u1, u2};
-        Arrays.sort(users);
-        return "MP:" + users[0] + ":" + users[1];
+        String[] users = { u1, u2 }; Arrays.sort(users); return "MP:" + users[0] + ":" + users[1];
     }
 
     private static class ClientHandler implements Runnable {
@@ -97,12 +94,12 @@ public class Server {
                 synchronized (connectedUsers) { connectedUsers.add(this.username); }
                 Server.broadcastUserList();
 
-                // Envois initiaux
                 for (String h : dbManager.getRelevantHistory(username)) out.println(h);
                 Server.sendFriendList(this);
 
-                List<String> servers = dbManager.getAllServers();
-                for (String srv : servers) {
+                // Envoi des serveurs dont je suis membre
+                List<String> myServers = dbManager.getUserServers(username);
+                for (String srv : myServers) {
                     out.println("NEW_SERVER:" + srv);
                     List<String> chans = dbManager.getChannels(srv);
                     for (String chan : chans) out.println("NEW_CHANNEL:" + srv + "|" + chan);
@@ -113,49 +110,55 @@ public class Server {
                     if (msg.startsWith("/create_server ")) {
                         String name = msg.substring(15).trim();
                         if (dbManager.createServer(name, username)) {
-                            Server.broadcastSystem("NEW_SERVER:" + name);
-                            Server.broadcastSystem("NEW_CHANNEL:" + name + "|#general");
+                            // Seul le créateur reçoit l'info immédiatement
+                            this.sendMessage("NEW_SERVER:" + name);
+                            this.sendMessage("NEW_CHANNEL:" + name + "|#general");
+                        } else {
+                            this.sendMessage("MSG:HOME///Système///Erreur: Nom déjà pris.");
+                        }
+                    }
+                    else if (msg.startsWith("/join_server ")) {
+                        String inputName = msg.substring(13).trim();
+                        String realName = dbManager.joinServer(inputName, username);
+                        if (realName != null) {
+                            this.sendMessage("NEW_SERVER:" + realName);
+                            List<String> chans = dbManager.getChannels(realName);
+                            for (String chan : chans) this.sendMessage("NEW_CHANNEL:" + realName + "|" + chan);
+                            this.sendMessage("MSG:HOME///Système///Vous avez rejoint : " + realName);
+                        } else {
+                            this.sendMessage("MSG:HOME///Système///Serveur introuvable : " + inputName);
                         }
                     }
                     else if (msg.startsWith("/create_channel ")) {
-                        String[] parts = msg.split(" ", 3);
+                        String[] parts = msg.split(" ", 3); // /create_channel NomServeur #NomChannel
                         if (parts.length == 3 && dbManager.createChannel(parts[1], parts[2])) {
+                            // Broadcast système : les clients filtreront si ils ne sont pas dans le serveur
                             Server.broadcastSystem("NEW_CHANNEL:" + parts[1] + "|" + parts[2]);
                         }
                     }
-                    // CORRECTION : Détection du séparateur ///
                     else if (msg.contains("///")) {
-                        // Le client envoie : CONTEXTE///MESSAGE
                         int idx = msg.indexOf("///");
                         String ctx = msg.substring(0, idx);
-                        String content = msg.substring(idx + 3); // +3 pour sauter les ///
+                        String content = msg.substring(idx + 3);
 
                         if (ctx.startsWith("MP:")) {
                             String target = ctx.substring(3);
-                            String normalized = Server.getMPContext(username, target);
-                            Server.broadcastMessage(username, content, normalized);
+                            Server.broadcastMessage(username, content, Server.getMPContext(username, target));
                         } else {
-                            // Ici ctx ressemble à "Serveur|#salon"
                             Server.broadcastMessage(username, content, ctx);
                         }
                     }
                     else if (msg.startsWith("/friend add ")) {
                         String target = msg.substring(12).trim();
-                        if (!target.equalsIgnoreCase(username)) {
-                            if (dbManager.sendFriendRequest(username, target)) {
-                                for (ClientHandler c : clientHandlers) {
-                                    if (c.username.equalsIgnoreCase(target)) c.sendMessage("FRIEND_REQ:" + username);
-                                }
-                            }
+                        if (!target.equalsIgnoreCase(username) && dbManager.sendFriendRequest(username, target)) {
+                            for (ClientHandler c : clientHandlers) if (c.username.equalsIgnoreCase(target)) c.sendMessage("FRIEND_REQ:" + username);
                         }
                     }
                     else if (msg.startsWith("/friend accept ")) {
-                        String requester = msg.substring(15).trim();
-                        dbManager.sendFriendRequest(requester, username);
+                        String req = msg.substring(15).trim();
+                        dbManager.sendFriendRequest(req, username);
                         Server.sendFriendList(this);
-                        for (ClientHandler c : clientHandlers) {
-                            if (c.username.equalsIgnoreCase(requester)) Server.sendFriendList(c);
-                        }
+                        for (ClientHandler c : clientHandlers) if (c.username.equalsIgnoreCase(req)) Server.sendFriendList(c);
                     }
                 }
             } catch (IOException e) {
@@ -167,5 +170,53 @@ public class Server {
             }
         }
         public void sendMessage(String m) { out.println(m); }
+    }
+
+    // --- SERVEUR VOCAL (UDP) ---
+    private static class VoiceServer implements Runnable {
+        private static final int VOICE_PORT = 1235;
+        // Map: "ServerName|ChannelName" -> Liste des clients (IP:Port)
+        private Map<String, Set<String>> voiceChannels = new HashMap<>();
+
+        @Override
+        public void run() {
+            try (DatagramSocket socket = new DatagramSocket(VOICE_PORT)) {
+                byte[] buffer = new byte[4096];
+                while (true) {
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(packet);
+
+                    byte[] data = packet.getData();
+                    int len = packet.getLength();
+
+                    // Extraction Header (se termine par byte 0)
+                    int separatorIndex = -1;
+                    for (int i = 0; i < len; i++) {
+                        if (data[i] == 0) { separatorIndex = i; break; }
+                    }
+
+                    if (separatorIndex > 0) {
+                        String header = new String(data, 0, separatorIndex); // Ex: "MonServ|🔊Vocal1"
+                        InetAddress clientIP = packet.getAddress();
+                        int clientPort = packet.getPort();
+                        String clientKey = clientIP.getHostAddress() + ":" + clientPort;
+
+                        voiceChannels.computeIfAbsent(header, k -> new HashSet<>()).add(clientKey);
+
+                        // Broadcast audio aux autres
+                        Set<String> participants = voiceChannels.get(header);
+                        for (String participant : participants) {
+                            if (!participant.equals(clientKey)) {
+                                String[] parts = participant.split(":");
+                                InetAddress targetIP = InetAddress.getByName(parts[0]);
+                                int targetPort = Integer.parseInt(parts[1]);
+                                DatagramPacket forward = new DatagramPacket(data, len, targetIP, targetPort);
+                                socket.send(forward);
+                            }
+                        }
+                    }
+                }
+            } catch (IOException e) { e.printStackTrace(); }
+        }
     }
 }
