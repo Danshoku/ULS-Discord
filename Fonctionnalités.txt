@@ -1,0 +1,6 @@
+Crypter les mots de passe
+Decrypter les mots de passe
+Crypter la base de données
+Décrypter pour utiliser la base de données
+Ajouter des paramètre utilisateur
+Ajouter la liste de personne en ligne et hors ligne sur le serveur actuel 

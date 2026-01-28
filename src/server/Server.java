@@ -19,7 +19,8 @@ public class Server {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
-                if (iface.isLoopback() || !iface.isUp()) continue;
+                if (iface.isLoopback() || !iface.isUp())
+                    continue;
                 Enumeration<InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
@@ -28,7 +29,9 @@ public class Server {
                     }
                 }
             }
-        } catch (SocketException e) { e.printStackTrace(); }
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
         System.out.println("Port TCP (Chat)  : " + PORT);
         System.out.println("Port UDP (Vocal) : 1235");
         System.out.println("------------------------------------------------");
@@ -41,22 +44,27 @@ public class Server {
                 Socket clientSocket = serverSocket.accept();
                 new Thread(new ClientHandler(clientSocket)).start();
             }
-        } catch (IOException e) { e.printStackTrace(); }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static void broadcastSystem(String msg) {
-        for (ClientHandler client : clientHandlers) client.sendMessage(msg);
+        for (ClientHandler client : clientHandlers)
+            client.sendMessage(msg);
     }
 
     public static void broadcastMessage(String sender, String content, String context) {
         dbManager.saveMessage(sender, content, context);
         String proto = "MSG:" + context + "///" + sender + "///" + content;
-        for (ClientHandler client : clientHandlers) client.sendMessage(proto);
+        for (ClientHandler client : clientHandlers)
+            client.sendMessage(proto);
     }
 
     public static void broadcastUserList() {
         String list = "USERLIST:" + String.join(",", connectedUsers);
-        for (ClientHandler client : clientHandlers) client.sendMessage(list);
+        for (ClientHandler client : clientHandlers)
+            client.sendMessage(list);
     }
 
     public static void sendFriendList(ClientHandler client) {
@@ -65,7 +73,9 @@ public class Server {
     }
 
     public static String getMPContext(String u1, String u2) {
-        String[] users = { u1, u2 }; Arrays.sort(users); return "MP:" + users[0] + ":" + users[1];
+        String[] users = { u1, u2 };
+        Arrays.sort(users);
+        return "MP:" + users[0] + ":" + users[1];
     }
 
     private static class ClientHandler implements Runnable {
@@ -74,7 +84,9 @@ public class Server {
         private BufferedReader in;
         private String username;
 
-        public ClientHandler(Socket s) { this.socket = s; }
+        public ClientHandler(Socket s) {
+            this.socket = s;
+        }
 
         @Override
         public void run() {
@@ -85,23 +97,32 @@ public class Server {
                 String u = in.readLine();
                 String p = in.readLine();
 
-                if (dbManager.checkUser(u, p) != 0) { out.println("FAIL:Identifiants incorrects"); return; }
+                if (dbManager.checkUser(u, p) != 0) {
+                    out.println("FAIL:Identifiants incorrects");
+                    return;
+                }
 
                 this.username = u;
                 out.println("SUCCESS");
 
-                synchronized (clientHandlers) { clientHandlers.add(this); }
-                synchronized (connectedUsers) { connectedUsers.add(this.username); }
+                synchronized (clientHandlers) {
+                    clientHandlers.add(this);
+                }
+                synchronized (connectedUsers) {
+                    connectedUsers.add(this.username);
+                }
                 Server.broadcastUserList();
 
-                for (String h : dbManager.getRelevantHistory(username)) out.println(h);
+                for (String h : dbManager.getRelevantHistory(username))
+                    out.println(h);
                 Server.sendFriendList(this);
 
                 List<String> myServers = dbManager.getUserServers(username);
                 for (String srv : myServers) {
                     out.println("NEW_SERVER:" + srv);
                     List<String> chans = dbManager.getChannels(srv);
-                    for (String chan : chans) out.println("NEW_CHANNEL:" + srv + "|" + chan);
+                    for (String chan : chans)
+                        out.println("NEW_CHANNEL:" + srv + "|" + chan);
                 }
 
                 String msg;
@@ -114,26 +135,24 @@ public class Server {
                         } else {
                             this.sendMessage("MSG:HOME///Système///Erreur: Nom déjà pris.");
                         }
-                    }
-                    else if (msg.startsWith("/join_server ")) {
+                    } else if (msg.startsWith("/join_server ")) {
                         String inputName = msg.substring(13).trim();
                         String realName = dbManager.joinServer(inputName, username);
                         if (realName != null) {
                             this.sendMessage("NEW_SERVER:" + realName);
                             List<String> chans = dbManager.getChannels(realName);
-                            for (String chan : chans) this.sendMessage("NEW_CHANNEL:" + realName + "|" + chan);
+                            for (String chan : chans)
+                                this.sendMessage("NEW_CHANNEL:" + realName + "|" + chan);
                             this.sendMessage("MSG:HOME///Système///Vous avez rejoint : " + realName);
                         } else {
                             this.sendMessage("MSG:HOME///Système///Serveur introuvable : " + inputName);
                         }
-                    }
-                    else if (msg.startsWith("/create_channel ")) {
+                    } else if (msg.startsWith("/create_channel ")) {
                         String[] parts = msg.split(" ", 3);
                         if (parts.length == 3 && dbManager.createChannel(parts[1], parts[2])) {
                             Server.broadcastSystem("NEW_CHANNEL:" + parts[1] + "|" + parts[2]);
                         }
-                    }
-                    else if (msg.contains("///")) {
+                    } else if (msg.contains("///")) {
                         int idx = msg.indexOf("///");
                         String ctx = msg.substring(0, idx);
                         String content = msg.substring(idx + 3);
@@ -144,29 +163,41 @@ public class Server {
                         } else {
                             Server.broadcastMessage(username, content, ctx);
                         }
-                    }
-                    else if (msg.startsWith("/friend add ")) {
+                    } else if (msg.startsWith("/friend add ")) {
                         String target = msg.substring(12).trim();
                         if (!target.equalsIgnoreCase(username) && dbManager.sendFriendRequest(username, target)) {
-                            for (ClientHandler c : clientHandlers) if (c.username.equalsIgnoreCase(target)) c.sendMessage("FRIEND_REQ:" + username);
+                            for (ClientHandler c : clientHandlers)
+                                if (c.username.equalsIgnoreCase(target))
+                                    c.sendMessage("FRIEND_REQ:" + username);
                         }
-                    }
-                    else if (msg.startsWith("/friend accept ")) {
+                    } else if (msg.startsWith("/friend accept ")) {
                         String req = msg.substring(15).trim();
                         dbManager.sendFriendRequest(req, username);
                         Server.sendFriendList(this);
-                        for (ClientHandler c : clientHandlers) if (c.username.equalsIgnoreCase(req)) Server.sendFriendList(c);
+                        for (ClientHandler c : clientHandlers)
+                            if (c.username.equalsIgnoreCase(req))
+                                Server.sendFriendList(c);
                     }
                 }
             } catch (IOException e) {
             } finally {
-                synchronized (clientHandlers) { clientHandlers.remove(this); }
-                synchronized (connectedUsers) { connectedUsers.remove(this.username); }
+                synchronized (clientHandlers) {
+                    clientHandlers.remove(this);
+                }
+                synchronized (connectedUsers) {
+                    connectedUsers.remove(this.username);
+                }
                 Server.broadcastUserList();
-                try { socket.close(); } catch (IOException e) {}
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                }
             }
         }
-        public void sendMessage(String m) { out.println(m); }
+
+        public void sendMessage(String m) {
+            out.println(m);
+        }
     }
 
     // --- SERVEUR VOCAL (UDP) ---
@@ -190,7 +221,10 @@ public class Server {
                     // Extraction Header (se termine par byte 0)
                     int separatorIndex = -1;
                     for (int i = 0; i < len; i++) {
-                        if (data[i] == 0) { separatorIndex = i; break; }
+                        if (data[i] == 0) {
+                            separatorIndex = i;
+                            break;
+                        }
                     }
 
                     if (separatorIndex > 0) {
@@ -226,7 +260,9 @@ public class Server {
                         }
                     }
                 }
-            } catch (IOException e) { e.printStackTrace(); }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 }

@@ -73,17 +73,26 @@ public class ClientGUI extends JFrame {
         serverStrip.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 10));
 
         JPanel homeBtn = createRoundButton(BLURPLE, "D", "Home / Amis");
-        homeBtn.addMouseListener(new MouseAdapter() { public void mouseClicked(MouseEvent e) { showHomeView(); } });
+        homeBtn.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                showHomeView();
+            }
+        });
         serverStrip.add(homeBtn);
 
         JSeparator sep = new JSeparator(SwingConstants.HORIZONTAL);
         sep.setPreferredSize(new Dimension(40, 2));
-        sep.setForeground(DISCORD_SIDEBAR); sep.setBackground(DISCORD_SIDEBAR);
+        sep.setForeground(DISCORD_SIDEBAR);
+        sep.setBackground(DISCORD_SIDEBAR);
         serverStrip.add(sep);
 
         JPanel addSrv = createRoundButton(DISCORD_BG, "+", "Ajouter Serveur");
         addSrv.setBorder(BorderFactory.createLineBorder(Color.GREEN));
-        addSrv.addMouseListener(new MouseAdapter() { public void mouseClicked(MouseEvent e) { createServerDialog(); } });
+        addSrv.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                createServerDialog();
+            }
+        });
         serverStrip.add(addSrv);
 
         add(serverStrip, BorderLayout.WEST);
@@ -144,7 +153,8 @@ public class ClientGUI extends JFrame {
         sidebarList.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
                 String selected = sidebarList.getSelectedValue();
-                if (selected == null) return;
+                if (selected == null)
+                    return;
 
                 if (activeServer.equals("HOME")) {
                     currentContext = "MP:" + selected;
@@ -229,7 +239,7 @@ public class ClientGUI extends JFrame {
     // --- LOGIQUE MÉTIER ---
 
     private void createServerDialog() {
-        Object[] options = {"Créer un serveur", "Rejoindre un serveur"};
+        Object[] options = { "Créer un serveur", "Rejoindre un serveur" };
         int n = JOptionPane.showOptionDialog(this, "Que voulez-vous faire ?", "Gestion Serveur",
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
@@ -249,7 +259,8 @@ public class ClientGUI extends JFrame {
     private void handleAddAction() {
         if (activeServer.equals("HOME")) {
             String target = JOptionPane.showInputDialog(this, "Pseudo de l'ami à ajouter :");
-            if (target != null) out.println("/friend add " + target.trim());
+            if (target != null)
+                out.println("/friend add " + target.trim());
         } else {
             String[] options = { "Salon Textuel (#)", "Salon Vocal (🔊)" };
             int choice = JOptionPane.showOptionDialog(this, "Type de salon ?", "Créer",
@@ -257,20 +268,27 @@ public class ClientGUI extends JFrame {
 
             String prefix = (choice == 1) ? "🔊" : "#";
             String chan = JOptionPane.showInputDialog(this, "Nom du salon :");
-            if (chan != null) out.println("/create_channel " + activeServer + " " + prefix + chan.trim());
+            if (chan != null)
+                out.println("/create_channel " + activeServer + " " + prefix + chan.trim());
         }
     }
 
     private void addServerIcon(String name) {
         for (Component c : serverStrip.getComponents()) {
-            if (c instanceof JPanel && name.equals(((JPanel)c).getToolTipText())) return;
+            if (c instanceof JPanel && name.equals(((JPanel) c).getToolTipText()))
+                return;
         }
         int hash = name.hashCode();
         Color c = new Color((hash & 0xFF0000) >> 16, (hash & 0x00FF00) >> 8, hash & 0x0000FF).brighter();
         JPanel srvBtn = createRoundButton(c, name.substring(0, 1).toUpperCase(), name);
-        srvBtn.addMouseListener(new MouseAdapter() { public void mouseClicked(MouseEvent e) { showServerView(name); } });
+        srvBtn.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                showServerView(name);
+            }
+        });
         serverStrip.add(srvBtn, serverStrip.getComponentCount() - 1);
-        serverStrip.revalidate(); serverStrip.repaint();
+        serverStrip.revalidate();
+        serverStrip.repaint();
     }
 
     private void showHomeView() {
@@ -287,7 +305,8 @@ public class ClientGUI extends JFrame {
         sidebarTitle.setText(serverName.toUpperCase());
         channelListModel.clear();
         List<String> chans = serverChannels.getOrDefault(serverName, new ArrayList<>());
-        for (String c : chans) channelListModel.addElement(c);
+        for (String c : chans)
+            channelListModel.addElement(c);
         sidebarList.setModel(channelListModel);
 
         if (!chans.isEmpty()) {
@@ -304,12 +323,14 @@ public class ClientGUI extends JFrame {
             for (Map.Entry<String, List<String>> entry : messageStorage.entrySet()) {
                 String ctx = entry.getKey();
                 if (ctx.startsWith("MP:") && ctx.contains(target)) {
-                    for (String m : entry.getValue()) chatArea.append(m + "\n");
+                    for (String m : entry.getValue())
+                        chatArea.append(m + "\n");
                 }
             }
         } else {
             List<String> list = messageStorage.getOrDefault(currentContext, new ArrayList<>());
-            for (String msg : list) chatArea.append(msg + "\n");
+            for (String msg : list)
+                chatArea.append(msg + "\n");
         }
         chatArea.setCaretPosition(chatArea.getDocument().getLength());
     }
@@ -351,30 +372,41 @@ public class ClientGUI extends JFrame {
         while (!connected) {
             JPanel loginPanel = new JPanel(new GridLayout(6, 1));
             loginPanel.setBackground(DISCORD_BG);
-            JLabel ipLabel = new JLabel("IP du Serveur:"); ipLabel.setForeground(TEXT_MUTED);
+            JLabel ipLabel = new JLabel("IP du Serveur:");
+            ipLabel.setForeground(TEXT_MUTED);
             JTextField ipField = new JTextField("localhost");
-            JLabel uL = new JLabel("Pseudo:"); uL.setForeground(TEXT_MUTED);
+            JLabel uL = new JLabel("Pseudo:");
+            uL.setForeground(TEXT_MUTED);
             JTextField userField = new JTextField();
-            JLabel pL = new JLabel("Mot de passe:"); pL.setForeground(TEXT_MUTED);
+            JLabel pL = new JLabel("Mot de passe:");
+            pL.setForeground(TEXT_MUTED);
             JPasswordField passField = new JPasswordField();
-            loginPanel.add(ipLabel); loginPanel.add(ipField);
-            loginPanel.add(uL); loginPanel.add(userField);
-            loginPanel.add(pL); loginPanel.add(passField);
+            loginPanel.add(ipLabel);
+            loginPanel.add(ipField);
+            loginPanel.add(uL);
+            loginPanel.add(userField);
+            loginPanel.add(pL);
+            loginPanel.add(passField);
 
-            int res = JOptionPane.showConfirmDialog(this, loginPanel, "Connexion Discord", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-            if (res != JOptionPane.OK_OPTION) System.exit(0);
+            int res = JOptionPane.showConfirmDialog(this, loginPanel, "Connexion Discord", JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE);
+            if (res != JOptionPane.OK_OPTION)
+                System.exit(0);
 
             String ip = ipField.getText().trim();
             String u = userField.getText().trim();
             String p = new String(passField.getPassword()).trim();
-            if (ip.isEmpty()) ip = "127.0.0.1";
-            if (u.isEmpty() || p.isEmpty()) continue;
+            if (ip.isEmpty())
+                ip = "127.0.0.1";
+            if (u.isEmpty() || p.isEmpty())
+                continue;
 
             try {
                 socket = new Socket(ip, 1234);
                 out = new PrintWriter(socket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                out.println(u); out.println(p);
+                out.println(u);
+                out.println(p);
                 String resp = in.readLine();
                 if ("SUCCESS".equals(resp)) {
                     username = u;
@@ -405,7 +437,8 @@ public class ClientGUI extends JFrame {
                         if (activeServer.equals(p[0])) {
                             SwingUtilities.invokeLater(() -> {
                                 channelListModel.clear();
-                                for (String c : serverChannels.get(p[0])) channelListModel.addElement(c);
+                                for (String c : serverChannels.get(p[0]))
+                                    channelListModel.addElement(c);
                             });
                         }
                     } else if (msg.startsWith("MSG:") || msg.startsWith("HISTORY:")) {
@@ -418,7 +451,8 @@ public class ClientGUI extends JFrame {
                             String cnt = payload.substring(idx2 + 3);
                             String display = "[" + snd + "] " + cnt;
                             messageStorage.computeIfAbsent(ctx, k -> new ArrayList<>()).add(display);
-                            if (currentContext.equals(ctx) || (currentContext.startsWith("MP:") && ctx.contains(username))) {
+                            if (currentContext.equals(ctx)
+                                    || (currentContext.startsWith("MP:") && ctx.contains(username))) {
                                 SwingUtilities.invokeLater(() -> updateChatDisplay());
                             }
                         }
@@ -427,13 +461,15 @@ public class ClientGUI extends JFrame {
                         if (!raw.isEmpty()) {
                             SwingUtilities.invokeLater(() -> {
                                 friendListModel.clear();
-                                for (String f : raw.split(",")) friendListModel.addElement(f);
+                                for (String f : raw.split(","))
+                                    friendListModel.addElement(f);
                             });
                         }
                     } else if (msg.startsWith("FRIEND_REQ:")) {
                         String req = msg.substring(11);
                         SwingUtilities.invokeLater(() -> {
-                            if (JOptionPane.showConfirmDialog(ClientGUI.this, req + " vous demande en ami !", "Ami", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                            if (JOptionPane.showConfirmDialog(ClientGUI.this, req + " vous demande en ami !", "Ami",
+                                    JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                                 out.println("/friend accept " + req);
                             }
                         });
@@ -441,11 +477,13 @@ public class ClientGUI extends JFrame {
                         String[] users = msg.equals("USERLIST:") ? new String[0] : msg.substring(9).split(",");
                         SwingUtilities.invokeLater(() -> {
                             userListModel.clear();
-                            for (String u : users) userListModel.addElement(u);
+                            for (String u : users)
+                                userListModel.addElement(u);
                         });
                     }
                 }
-            } catch (IOException e) { }
+            } catch (IOException e) {
+            }
         }
     }
 
@@ -453,10 +491,18 @@ public class ClientGUI extends JFrame {
 
     static class PaddingRenderer extends DefaultListCellRenderer {
         private int padding;
-        public PaddingRenderer(int padding) { this.padding = padding; }
-        public PaddingRenderer() { this(10); }
+
+        public PaddingRenderer(int padding) {
+            this.padding = padding;
+        }
+
+        public PaddingRenderer() {
+            this(10);
+        }
+
         @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+                boolean cellHasFocus) {
             JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             label.setBorder(new EmptyBorder(padding / 2, padding, padding / 2, padding));
             if (isSelected) {
@@ -473,26 +519,36 @@ public class ClientGUI extends JFrame {
     static class DiscordMemberRenderer extends JPanel implements ListCellRenderer<String> {
         private JLabel nameLabel;
         private JPanel avatarPanel;
+
         public DiscordMemberRenderer() {
             setLayout(new BorderLayout(10, 0));
             setBackground(DISCORD_SIDEBAR);
             setBorder(new EmptyBorder(5, 10, 5, 10));
             avatarPanel = new JPanel() {
                 protected void paintComponent(Graphics g) {
-                    super.paintComponent(g); Graphics2D g2 = (Graphics2D) g;
+                    super.paintComponent(g);
+                    Graphics2D g2 = (Graphics2D) g;
                     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(BLURPLE); g2.fillOval(0, 0, 32, 32);
-                    g2.setColor(DISCORD_SIDEBAR); g2.fillOval(22, 22, 14, 14);
-                    g2.setColor(ONLINE_GREEN); g2.fillOval(24, 24, 10, 10);
+                    g2.setColor(BLURPLE);
+                    g2.fillOval(0, 0, 32, 32);
+                    g2.setColor(DISCORD_SIDEBAR);
+                    g2.fillOval(22, 22, 14, 14);
+                    g2.setColor(ONLINE_GREEN);
+                    g2.fillOval(24, 24, 10, 10);
                 }
             };
             avatarPanel.setPreferredSize(new Dimension(35, 35));
             avatarPanel.setOpaque(false);
-            nameLabel = new JLabel(); nameLabel.setForeground(TEXT_MUTED); nameLabel.setFont(FONT_BOLD);
-            add(avatarPanel, BorderLayout.WEST); add(nameLabel, BorderLayout.CENTER);
+            nameLabel = new JLabel();
+            nameLabel.setForeground(TEXT_MUTED);
+            nameLabel.setFont(FONT_BOLD);
+            add(avatarPanel, BorderLayout.WEST);
+            add(nameLabel, BorderLayout.CENTER);
         }
+
         @Override
-        public Component getListCellRendererComponent(JList<? extends String> list, String value, int index, boolean isSelected, boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<? extends String> list, String value, int index,
+                boolean isSelected, boolean cellHasFocus) {
             nameLabel.setText(value);
             if (isSelected) {
                 setBackground(Color.decode("#3f4147"));
@@ -515,7 +571,8 @@ public class ClientGUI extends JFrame {
     private Timer keepAliveTimer;
 
     private void joinVoiceChannel(String fullChannelName) {
-        if (isVoiceRunning) leaveVoiceChannel();
+        if (isVoiceRunning)
+            leaveVoiceChannel();
         try {
             voiceSocket = new DatagramSocket();
             isVoiceRunning = true;
@@ -534,7 +591,8 @@ public class ClientGUI extends JFrame {
             playbackThread.start();
 
             // 3. Keep-Alive (Battement de coeur)
-            // Envoie un paquet vide toutes les 3s si on ne parle pas, pour garder le port UDP ouvert (NAT)
+            // Envoie un paquet vide toutes les 3s si on ne parle pas, pour garder le port
+            // UDP ouvert (NAT)
             keepAliveTimer = new Timer();
             keepAliveTimer.scheduleAtFixedRate(new TimerTask() {
                 @Override
@@ -542,7 +600,8 @@ public class ClientGUI extends JFrame {
                     if (isVoiceRunning && voiceSocket != null && !voiceSocket.isClosed()) {
                         try {
                             voiceSocket.send(init); // Renvoie le header d'init comme heartbeat
-                        } catch (IOException e) {}
+                        } catch (IOException e) {
+                        }
                     }
                 }
             }, 1000, 3000);
@@ -556,14 +615,20 @@ public class ClientGUI extends JFrame {
 
     private void leaveVoiceChannel() {
         isVoiceRunning = false;
-        if (keepAliveTimer != null) keepAliveTimer.cancel();
-        if (voiceSocket != null && !voiceSocket.isClosed()) voiceSocket.close();
+        if (keepAliveTimer != null)
+            keepAliveTimer.cancel();
+        if (voiceSocket != null && !voiceSocket.isClosed())
+            voiceSocket.close();
         currentVoiceChannel = null;
     }
 
     private class AudioCapture implements Runnable {
         InetAddress srvAddr;
-        public AudioCapture(InetAddress a) { this.srvAddr = a; }
+
+        public AudioCapture(InetAddress a) {
+            this.srvAddr = a;
+        }
+
         @Override
         public void run() {
             try {
@@ -571,10 +636,14 @@ public class ClientGUI extends JFrame {
                 AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, false);
                 DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
 
-                if (!AudioSystem.isLineSupported(info)) { System.err.println("Micro non supporté"); return; }
+                if (!AudioSystem.isLineSupported(info)) {
+                    System.err.println("Micro non supporté");
+                    return;
+                }
 
                 TargetDataLine micro = (TargetDataLine) AudioSystem.getLine(info);
-                micro.open(format); micro.start();
+                micro.open(format);
+                micro.start();
 
                 byte[] buffer = new byte[1024];
                 byte[] header = (currentVoiceChannel + "\0").getBytes();
@@ -589,14 +658,18 @@ public class ClientGUI extends JFrame {
                             System.arraycopy(buffer, 0, packetData, header.length, read);
 
                             DatagramPacket packet = new DatagramPacket(packetData, packetData.length, srvAddr, 1235);
-                            if (voiceSocket != null && !voiceSocket.isClosed()) voiceSocket.send(packet);
+                            if (voiceSocket != null && !voiceSocket.isClosed())
+                                voiceSocket.send(packet);
                         }
                     } else {
                         Thread.sleep(10); // Évite de surcharger le CPU si pas de son
                     }
                 }
                 micro.close();
-            } catch (Exception e) { if (isVoiceRunning) e.printStackTrace(); }
+            } catch (Exception e) {
+                if (isVoiceRunning)
+                    e.printStackTrace();
+            }
         }
     }
 
@@ -608,7 +681,8 @@ public class ClientGUI extends JFrame {
                 AudioFormat format = new AudioFormat(16000.0f, 16, 1, true, false);
                 DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
                 SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(info);
-                speakers.open(format); speakers.start();
+                speakers.open(format);
+                speakers.start();
 
                 byte[] buffer = new byte[4096]; // Buffer plus large pour la réception
                 while (isVoiceRunning) {
@@ -620,7 +694,12 @@ public class ClientGUI extends JFrame {
 
                         // Sauter le header
                         int offset = 0;
-                        for (int i = 0; i < len; i++) { if (data[i] == 0) { offset = i + 1; break; } }
+                        for (int i = 0; i < len; i++) {
+                            if (data[i] == 0) {
+                                offset = i + 1;
+                                break;
+                            }
+                        }
 
                         if (offset < len) {
                             speakers.write(data, offset, len - offset);
@@ -628,7 +707,10 @@ public class ClientGUI extends JFrame {
                     }
                 }
                 speakers.close();
-            } catch (Exception e) { if (isVoiceRunning) e.printStackTrace(); }
+            } catch (Exception e) {
+                if (isVoiceRunning)
+                    e.printStackTrace();
+            }
         }
     }
 
