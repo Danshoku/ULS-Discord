@@ -9,15 +9,14 @@ public class DatabaseManager {
 
     public DatabaseManager() {
         try {
-            // Fix : Chemin absolu pour éviter les erreurs de localisation de fichier
             String path = System.getProperty("user.dir") + java.io.File.separator + "discord.db";
-            System.out.println("[DEBUG] Database Path: " + path);
             String url = "jdbc:sqlite:" + path;
             connection = DriverManager.getConnection(url);
             createTables();
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
+    // --- MODIFICATION ICI : Ajout des tables roles et user_roles ---
     private void createTables() {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT NOT NULL)");
@@ -25,16 +24,17 @@ public class DatabaseManager {
             stmt.execute("CREATE TABLE IF NOT EXISTS servers (name TEXT PRIMARY KEY, owner TEXT)");
             stmt.execute("CREATE TABLE IF NOT EXISTS server_members (id INTEGER PRIMARY KEY AUTOINCREMENT, server_name TEXT, username TEXT)");
             stmt.execute("CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY AUTOINCREMENT, server_name TEXT, channel_name TEXT)");
-            stmt.execute("CREATE TABLE IF NOT EXISTS messages (" +
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "sender TEXT, content TEXT, context TEXT, " +
-                    "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-            // Table pour les invitations
+            stmt.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, content TEXT, context TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
             stmt.execute("CREATE TABLE IF NOT EXISTS invites (code TEXT PRIMARY KEY, server_name TEXT)");
+
+            // NOUVELLES TABLES POUR LES PERMISSIONS
+            stmt.execute("CREATE TABLE IF NOT EXISTS roles (id INTEGER PRIMARY KEY AUTOINCREMENT, server_name TEXT, role_name TEXT, permissions INTEGER)");
+            stmt.execute("CREATE TABLE IF NOT EXISTS user_roles (server_name TEXT, username TEXT, role_id INTEGER)");
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
-    // --- GESTION SERVEURS & INVITATIONS ---
+    // ... (GARDE TOUTES TES MÉTHODES EXISTANTES : getServerMembers, joinServer, etc.) ...
+    // ... (Ne touche pas à tes méthodes existantes, ajoute juste la suite à la fin) ...
 
     public List<String> getServerMembers(String serverName) {
         List<String> members = new ArrayList<>();
@@ -57,7 +57,7 @@ public class DatabaseManager {
 
         try (PreparedStatement check = connection.prepareStatement("SELECT 1 FROM server_members WHERE server_name = ? AND username = ?")) {
             check.setString(1, realName); check.setString(2, username);
-            if (check.executeQuery().next()) return realName; // Déjà membre
+            if (check.executeQuery().next()) return realName;
         } catch (SQLException e) { return null; }
 
         try (PreparedStatement pstmt = connection.prepareStatement("INSERT INTO server_members(server_name, username) VALUES(?, ?)")) {
@@ -121,8 +121,6 @@ public class DatabaseManager {
         } catch (SQLException e) {} return l;
     }
 
-    // --- GESTION MESSAGES & CANAUX ---
-
     public void saveMessage(String sender, String content, String context) {
         try (PreparedStatement pstmt = connection.prepareStatement("INSERT INTO messages(sender, content, context) VALUES(?, ?, ?)")) {
             pstmt.setString(1, sender); pstmt.setString(2, content); pstmt.setString(3, context); pstmt.executeUpdate();
@@ -131,7 +129,6 @@ public class DatabaseManager {
 
     public List<String> getRelevantHistory(String username) {
         List<String> history = new ArrayList<>();
-        // Fusion : On garde l'heure (strftime)
         String sql = "SELECT sender, content, context, strftime('%H:%M', timestamp) as timeStr FROM messages WHERE context NOT LIKE 'MP:%' OR context LIKE ? OR context LIKE ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setString(1, "MP:" + username + ":%"); pstmt.setString(2, "MP:%:" + username);
@@ -156,8 +153,6 @@ public class DatabaseManager {
             while(rs.next()) l.add(rs.getString("channel_name"));
         } catch (SQLException e) {} return l;
     }
-
-    // --- UTILISATEURS ---
 
     public int checkUser(String u, String p) {
         try (PreparedStatement ps = connection.prepareStatement("SELECT password FROM users WHERE username = ?")) {
@@ -187,5 +182,48 @@ public class DatabaseManager {
         try (Statement s = connection.createStatement(); ResultSet rs = s.executeQuery("SELECT name FROM servers")) {
             while(rs.next()) l.add(rs.getString("name"));
         } catch (SQLException e) {} return l;
+    }
+
+    // --- AJOUT : SYSTÈME DE RÔLES ---
+
+    // Récupère les permissions totales d'un utilisateur (Owner = 9999, sinon somme des rôles)
+    public int getUserPermissions(String serverName, String username) {
+        try (PreparedStatement checkOwner = connection.prepareStatement("SELECT owner FROM servers WHERE name = ?")) {
+            checkOwner.setString(1, serverName);
+            ResultSet rs = checkOwner.executeQuery();
+            if (rs.next() && username.equals(rs.getString("owner"))) return 9999;
+        } catch (SQLException e) { e.printStackTrace(); }
+
+        int totalPerms = 0;
+        String sql = "SELECT r.permissions FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.server_name = ? AND ur.username = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, serverName); ps.setString(2, username);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) totalPerms |= rs.getInt("permissions");
+        } catch (SQLException e) { e.printStackTrace(); }
+        return totalPerms;
+    }
+
+    // Créer un rôle
+    public boolean createRole(String serverName, String roleName, int permissions) {
+        try (PreparedStatement ps = connection.prepareStatement("INSERT INTO roles(server_name, role_name, permissions) VALUES(?, ?, ?)")) {
+            ps.setString(1, serverName); ps.setString(2, roleName); ps.setInt(3, permissions);
+            ps.executeUpdate(); return true;
+        } catch (SQLException e) { return false; }
+    }
+
+    // Assigner un rôle
+    public boolean assignRole(String serverName, String targetUser, String roleName) {
+        int roleId = -1;
+        try (PreparedStatement ps = connection.prepareStatement("SELECT id FROM roles WHERE server_name=? AND role_name=?")) {
+            ps.setString(1, serverName); ps.setString(2, roleName);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) roleId = rs.getInt("id"); else return false;
+        } catch (SQLException e) { return false; }
+
+        try (PreparedStatement ps = connection.prepareStatement("INSERT INTO user_roles(server_name, username, role_id) VALUES(?, ?, ?)")) {
+            ps.setString(1, serverName); ps.setString(2, targetUser); ps.setInt(3, roleId);
+            ps.executeUpdate(); return true;
+        } catch (SQLException e) { return false; }
     }
 }

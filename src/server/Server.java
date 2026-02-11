@@ -5,6 +5,8 @@ import java.net.*;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Server {
     private static final int PORT = 1234;
@@ -12,10 +14,24 @@ public class Server {
     private static Set<String> connectedUsers = new HashSet<>();
     private static DatabaseManager dbManager;
 
+    // Codes de Permissions (Bitmask)
+    public static final int PERM_ADMIN = 1;
+    public static final int PERM_BAN = 2;
+    public static final int PERM_KICK = 4;
+    public static final int PERM_CHANNELS = 8;
+
+    // --- MODÉRATION AUTOMATIQUE : LISTE DES MOTS INTERDITS ---
+    // Ajout de "ta gueule" et "putain"
+    private static final List<String> BANNED_WORDS = Arrays.asList(
+            "merde", "con", "connard", "salaud", "abruti", "debile", "idiot",
+            "pute", "salope", "fdp", "encule", "batard", "fais chier", "nique",
+            "putain", "ta gueule"
+    );
+
     public static void main(String[] args) {
         dbManager = new DatabaseManager();
 
-        System.out.println(">>> Serveur Discord (Ultimate) démarré...");
+        System.out.println(">>> Serveur Piscord (Ultimate + AutoMod V4) démarré...");
         System.out.println("------------------------------------------------");
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
@@ -51,7 +67,6 @@ public class Server {
 
     public static void broadcastMessage(String sender, String content, String context) {
         dbManager.saveMessage(sender, content, context);
-        // Fusion : Ajout de l'heure
         String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
         String proto = "MSG:" + context + "///" + sender + "///" + content + "///" + time;
         for (ClientHandler client : clientHandlers) client.sendMessage(proto);
@@ -67,7 +82,6 @@ public class Server {
         client.sendMessage("FRIENDLIST:" + String.join(",", friends));
     }
 
-    // Fusion : Envoi de la liste des membres pour le statut hors-ligne
     public static void sendServerMembers(ClientHandler client, String serverName) {
         List<String> members = dbManager.getServerMembers(serverName);
         client.sendMessage("SERVER_MEMBERS:" + serverName + "|" + String.join(",", members));
@@ -75,6 +89,19 @@ public class Server {
 
     public static String getMPContext(String u1, String u2) {
         String[] users = { u1, u2 }; Arrays.sort(users); return "MP:" + users[0] + ":" + users[1];
+    }
+
+    // --- FONCTION DE DÉTECTION ---
+    private static boolean containsHateSpeech(String content) {
+        String normalized = content.toLowerCase();
+        for (String badWord : BANNED_WORDS) {
+            Pattern p = Pattern.compile("(?i)" + Pattern.quote(badWord));
+            Matcher m = p.matcher(normalized);
+            if (m.find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static class ClientHandler implements Runnable {
@@ -92,9 +119,9 @@ public class Server {
                 out = new PrintWriter(socket.getOutputStream(), true);
 
                 String u = in.readLine();
-                String p = in.readLine();
+                String pwd = in.readLine();
 
-                if (dbManager.checkUser(u, p) != 0) { out.println("FAIL:Identifiants incorrects"); return; }
+                if (dbManager.checkUser(u, pwd) != 0) { out.println("FAIL:Identifiants incorrects"); return; }
 
                 this.username = u;
                 out.println("SUCCESS");
@@ -118,7 +145,51 @@ public class Server {
                 while ((msg = in.readLine()) != null) {
                     System.out.println("[DEBUG] " + username + ": " + msg);
 
-                    if (msg.startsWith("/create_server ")) {
+                    if (msg.startsWith("/role create ")) {
+                        String[] parts = msg.split(" ");
+                        if (parts.length == 5) {
+                            String srv = parts[2];
+                            int perms = dbManager.getUserPermissions(srv, username);
+                            if (perms == 9999 || (perms & PERM_ADMIN) != 0) {
+                                dbManager.createRole(srv, parts[3], Integer.parseInt(parts[4]));
+                                this.sendMessage("MSG:HOME///Système///Rôle " + parts[3] + " créé sur " + srv + " !///00:00");
+                            } else {
+                                this.sendMessage("MSG:HOME///Système///Erreur: Permissions insuffisantes.///00:00");
+                            }
+                        }
+                    }
+                    else if (msg.startsWith("/role add ")) {
+                        String[] parts = msg.split(" ");
+                        if (parts.length == 5) {
+                            String srv = parts[2];
+                            int perms = dbManager.getUserPermissions(srv, username);
+                            if (perms == 9999 || (perms & PERM_ADMIN) != 0) {
+                                if (dbManager.assignRole(srv, parts[3], parts[4])) {
+                                    this.sendMessage("MSG:HOME///Système///Rôle " + parts[4] + " donné à " + parts[3] + ".///00:00");
+                                } else {
+                                    this.sendMessage("MSG:HOME///Système///Erreur: Rôle introuvable.///00:00");
+                                }
+                            } else {
+                                this.sendMessage("MSG:HOME///Système///Erreur: Permissions insuffisantes.///00:00");
+                            }
+                        }
+                    }
+                    else if (msg.startsWith("/kick ")) {
+                        String[] parts = msg.split(" ");
+                        if (parts.length == 3) {
+                            String srv = parts[1];
+                            String target = parts[2];
+                            int kickPerms = dbManager.getUserPermissions(srv, username);
+                            if (kickPerms == 9999 || (kickPerms & PERM_KICK) != 0 || (kickPerms & PERM_ADMIN) != 0) {
+                                if(dbManager.leaveServer(target, srv)) {
+                                    Server.broadcastMessage("Système", target + " a été expulsé(e) de " + srv, srv + "|#general");
+                                }
+                            } else {
+                                this.sendMessage("MSG:HOME///Système///Permissions insuffisantes pour expulser.///00:00");
+                            }
+                        }
+                    }
+                    else if (msg.startsWith("/create_server ")) {
                         String name = msg.substring(15).trim();
                         if (dbManager.createServer(name, username)) {
                             this.sendMessage("NEW_SERVER:" + name);
@@ -134,7 +205,7 @@ public class Server {
                         if (code != null) this.sendMessage("INVITE_CODE:" + code);
                         else this.sendMessage("MSG:HOME///Système///Erreur invitation.///00:00");
                     }
-                    else if (msg.startsWith("/join ")) { // Via Code
+                    else if (msg.startsWith("/join ")) {
                         String code = msg.substring(6).trim();
                         String realName = dbManager.getServerFromInvite(code);
                         if (realName != null) {
@@ -150,7 +221,7 @@ public class Server {
                             this.sendMessage("MSG:HOME///Système///Invitation invalide.///00:00");
                         }
                     }
-                    else if (msg.startsWith("/join_server ")) { // Via Nom (Backup)
+                    else if (msg.startsWith("/join_server ")) {
                         String inputName = msg.substring(13).trim();
                         String realName = dbManager.joinServer(inputName, username);
                         if (realName != null) {
@@ -172,21 +243,53 @@ public class Server {
                     }
                     else if (msg.startsWith("/create_channel ")) {
                         String[] parts = msg.split(" ", 3);
-                        if (parts.length == 3 && dbManager.createChannel(parts[1], parts[2])) {
-                            Server.broadcastSystem("NEW_CHANNEL:" + parts[1] + "|" + parts[2]);
+                        if (parts.length == 3) {
+                            String srvName = parts[1];
+                            int chanPerms = dbManager.getUserPermissions(srvName, username);
+                            if (chanPerms == 9999 || (chanPerms & PERM_CHANNELS) != 0 || (chanPerms & PERM_ADMIN) != 0) {
+                                if (dbManager.createChannel(srvName, parts[2])) {
+                                    Server.broadcastSystem("NEW_CHANNEL:" + srvName + "|" + parts[2]);
+                                }
+                            } else {
+                                this.sendMessage("MSG:HOME///Système///Permission refusée : Créer salon.///00:00");
+                            }
                         }
                     }
+                    // --- GESTION DES MESSAGES (TEXTE & IMAGES) AVEC FILTRE AUTOMOD ---
                     else if (msg.contains("///")) {
                         int idx = msg.indexOf("///");
                         String ctx = msg.substring(0, idx);
                         String content = msg.substring(idx + 3);
-                        if (ctx.startsWith("MP:")) {
-                            String target = ctx.substring(3);
-                            Server.broadcastMessage(username, content, Server.getMPContext(username, target));
-                        } else {
-                            Server.broadcastMessage(username, content, ctx);
+
+                        // VÉRIFICATION AUTOMOD (Mots interdits)
+                        if (!content.startsWith("IMG_B64:") && Server.containsHateSpeech(content)) {
+
+                            String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+
+                            // MODIFICATION IMPORTANTE : Retrait des balises <html> pour éviter de casser le rendu
+                            // Le client ajoute déjà <html><body>...</body></html> autour de tout le chat.
+                            // Ajouter un autre <html> ici créait des balises imbriquées invalides qui cachaient les messages suivants.
+                            String responseContent = "<span style='color:#da373c; text-decoration:line-through;'>" + content + "</span> <span style='color:#da373c; font-weight:bold;'>(Bloqué : Propos haineux)</span>";
+
+                            // On construit le message avec le pseudo de l'envoyeur
+                            String responseMsg = "MSG:" + ctx + "///" + username + "///" + responseContent + "///" + time;
+
+                            // On renvoie UNIQUEMENT à l'expéditeur (message bloqué pour les autres)
+                            this.sendMessage(responseMsg);
+
+                            System.out.println("[AutoMod] Message bloqué de " + username + ": " + content);
+                        }
+                        else {
+                            // SI LE MESSAGE EST CLEAN : On diffuse normalement
+                            if (ctx.startsWith("MP:")) {
+                                String target = ctx.substring(3);
+                                Server.broadcastMessage(username, content, Server.getMPContext(username, target));
+                            } else {
+                                Server.broadcastMessage(username, content, ctx);
+                            }
                         }
                     }
+                    // ---------------------------------------------------------
                     else if (msg.startsWith("/friend add ")) {
                         String target = msg.substring(12).trim();
                         if (!target.equalsIgnoreCase(username) && dbManager.sendFriendRequest(username, target)) {
